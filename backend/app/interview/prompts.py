@@ -37,27 +37,28 @@ Return ONLY the follow-up question. No preamble.
 """
 
 REPORT_GENERATION_PROMPT = """
-You are a senior hiring manager. Generate an interview assessment report.
+You are a senior hiring manager. Assess the interview below and return ONLY a valid JSON object — no markdown, no explanation outside the JSON.
 
 Role: {role}
-Candidate resume summary:
+
+Candidate profile:
 {resume_summary}
 
 Interview transcript:
 {transcript}
 
-Return a JSON object with this exact structure:
+Return exactly this JSON structure (keep summary to 3 sentences max):
 {{
-  "summary": "2-3 paragraph overall assessment",
-  "strengths": ["strength 1", "strength 2", ...],
-  "weaknesses": ["weakness 1", "weakness 2", ...],
-  "overall_score": <number 0-100>,
-  "recommendation": "Hire" | "Maybe" | "Reject",
+  "summary": "3 sentence assessment",
+  "strengths": ["up to 3 strengths"],
+  "weaknesses": ["up to 3 weaknesses"],
+  "overall_score": <integer 0-100>,
+  "recommendation": "Hire",
   "per_question_scores": [
-    {{"question": "...", "score": <0-10>, "comment": "..."}}
+    {{"question": "Q1 short label", "score": <0-10>, "comment": "1 sentence"}}
   ]
 }}
 
-Be honest, fair, and specific. Base everything on the answers provided.
-Return ONLY the JSON object.
+recommendation must be exactly one of: "Hire", "Maybe", "Reject".
+Return ONLY the JSON object. No text before or after.
 """
