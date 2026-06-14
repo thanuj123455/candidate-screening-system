@@ -90,13 +90,13 @@ function ResultsContent() {
           <div className="flex items-center gap-3">
             <span
               className={cn(
-                "rounded-full px-4 py-1.5 text-sm font-bold text-white",
+                "rounded-full px-5 py-2 text-base font-extrabold tracking-wide uppercase",
                 recommendationColor(report.recommendation)
               )}
             >
               {report.recommendation}
             </span>
-            <span className="text-sm text-gray-500">Recommendation</span>
+            <span className="text-sm font-medium text-gray-500">Hiring Recommendation</span>
           </div>
           <p className="text-sm text-gray-700 leading-relaxed">{report.summary}</p>
         </div>

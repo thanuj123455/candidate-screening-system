@@ -15,8 +15,8 @@ export function difficultyColor(level: string) {
 
 export function recommendationColor(rec: string) {
   return {
-    Hire: "bg-green-500",
-    Maybe: "bg-yellow-500",
-    Reject: "bg-red-500",
-  }[rec] ?? "bg-gray-400";
+    Hire:   "bg-green-600 text-white ring-2 ring-green-300",
+    Maybe:  "bg-amber-400 text-gray-900 ring-2 ring-amber-200",
+    Reject: "bg-red-600   text-white ring-2 ring-red-300",
+  }[rec] ?? "bg-gray-200 text-gray-800";
 }
