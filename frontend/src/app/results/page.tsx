@@ -89,10 +89,19 @@ function ResultsContent() {
         <div className="flex-1 space-y-4">
           <div className="flex items-center gap-3">
             <span
-              className={cn(
-                "rounded-full px-5 py-2 text-base font-extrabold tracking-wide uppercase",
-                recommendationColor(report.recommendation)
-              )}
+              style={{
+                backgroundColor:
+                  report.recommendation === "Hire" ? "#16a34a" :
+                  report.recommendation === "Reject" ? "#dc2626" : "#f59e0b",
+                color:
+                  report.recommendation === "Maybe" ? "#1f2937" : "#ffffff",
+                padding: "8px 20px",
+                borderRadius: "9999px",
+                fontWeight: 800,
+                fontSize: "15px",
+                letterSpacing: "0.05em",
+                textTransform: "uppercase",
+              }}
             >
               {report.recommendation}
             </span>
