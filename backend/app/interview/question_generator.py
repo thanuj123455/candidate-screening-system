@@ -33,7 +33,7 @@ async def generate_question(
         difficulty=difficulty,
     )
 
-    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=30.0)
     message = await client.chat.completions.create(
         model=settings.llm_model,
         max_tokens=512,
@@ -50,7 +50,7 @@ async def generate_follow_up(original_question: str, candidate_answer: str) -> s
         original_question=original_question,
         candidate_answer=candidate_answer,
     )
-    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url, timeout=30.0)
     message = await client.chat.completions.create(
         model=settings.llm_model,
         max_tokens=256,

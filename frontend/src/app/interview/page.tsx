@@ -45,20 +45,24 @@ function InterviewContent() {
     setError("");
     try {
       await api.submitAnswer(sessionId, question.question_id, answer.trim());
-      const newCount = answeredCount + 1;
-      setAnsweredCount(newCount);
-
-      const done = question.is_last || newCount >= question.total_questions;
-      if (done) {
-        // endSession is best-effort — don't let it block navigation
-        await api.endSession(sessionId).catch(() => {});
-        router.push(`/results?session=${sessionId}`);
-      } else {
-        await loadQuestion();
-      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Failed to submit answer. Please try again.");
       setSubmitting(false);
+      return;
+    }
+
+    // Answer saved — unblock the UI immediately
+    const newCount = answeredCount + 1;
+    setAnsweredCount(newCount);
+    setSubmitting(false);
+
+    const done = question.is_last || newCount >= question.total_questions;
+    if (done) {
+      await api.endSession(sessionId).catch(() => {});
+      router.push(`/results?session=${sessionId}`);
+    } else {
+      // loadQuestion triggers LLM — runs independently of submit state
+      await loadQuestion();
     }
   }
 
