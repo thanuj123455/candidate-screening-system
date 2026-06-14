@@ -1,88 +1,152 @@
 # AI-Powered Role-Based Candidate Screening System
 
-A production-grade web application that conducts intelligent, personalised technical interviews using **Retrieval-Augmented Generation (RAG)**. Candidates upload their résumé, pick a target role, and receive a custom interview powered by Claude AI — grounded in role-specific knowledge.
+A full-stack web application that conducts intelligent, personalised technical interviews using **Retrieval-Augmented Generation (RAG)**. Candidates upload their résumé, select a target role, and receive a fully customised AI-driven interview — grounded in role-specific knowledge from real textbooks.
+
+Built as part of the **PGAGI AI/ML & Backend Engineering Internship** assignment.
 
 ---
 
-## Architecture Overview
+## What It Does
+
+1. **Candidate uploads a PDF résumé** → LLM extracts skills, technologies, and domain knowledge
+2. **RAG pipeline retrieves relevant knowledge** from role-specific textbooks stored in ChromaDB
+3. **AI generates tailored questions** grounded in both the candidate's background and the knowledge base
+4. **Candidate answers questions** through an interactive UI — 8 questions per session with adaptive difficulty (easy → medium → hard)
+5. **AI generates a final report** with an overall score (0–100), strengths, weaknesses, per-question scores, and a **Hire / Maybe / Reject** recommendation
+
+---
+
+## System Architecture
 
 ```
-┌────────────────────────────────────────────────────────────┐
-│                        Browser                             │
-│         Next.js 15  ·  TypeScript  ·  Tailwind CSS        │
-└─────────────────────────────┬──────────────────────────────┘
-                              │ REST / JSON
-┌─────────────────────────────▼──────────────────────────────┐
-│                   FastAPI  (Python 3.11)                   │
-│  ┌──────────┐  ┌───────────┐  ┌──────────┐  ┌─────────┐  │
-│  │  Resume  │  │ Interview │  │   RAG    │  │ Report  │  │
-│  │  Parser  │  │  Engine   │  │ Pipeline │  │   Gen   │  │
-│  └────┬─────┘  └─────┬─────┘  └────┬─────┘  └────┬────┘  │
-│       │              │             │              │        │
-│  ┌────▼──────────────▼─────────────▼──────────────▼────┐  │
-│  │             Service Layer (dependency injection)     │  │
-│  └────┬──────────────────────────────────┬─────────────┘  │
-│       │                                  │                 │
-│  ┌────▼────┐                       ┌─────▼──────┐         │
-│  │PostgreSQL│                      │  ChromaDB  │         │
-│  │(SQLAlch.) │                     │ (Embeddings)│        │
-│  └──────────┘                      └────────────┘         │
-│                                                            │
-│             Claude Sonnet (via Anthropic API)              │
-└────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────┐
+│                        Browser                           │
+│       Next.js 15  ·  TypeScript  ·  Tailwind CSS        │
+└───────────────────────────┬──────────────────────────────┘
+                            │  REST / JSON
+┌───────────────────────────▼──────────────────────────────┐
+│                  FastAPI  (Python 3.11)                  │
+│                                                          │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
+│  │Resume Parser│  │Interview     │  │Report Generator│  │
+│  │(pdfplumber +│  │Engine        │  │(Groq LLM +     │  │
+│  │ Groq LLM)  │  │(RAG-grounded)│  │ structured JSON)│  │
+│  └──────┬──────┘  └──────┬───────┘  └───────┬────────┘  │
+│         │                │                  │            │
+│  ┌──────▼────────────────▼──────────────────▼────────┐  │
+│  │              Service Layer                        │  │
+│  └──────┬────────────────────────────┬───────────────┘  │
+│         │                            │                   │
+│  ┌──────▼────────┐          ┌────────▼──────────┐        │
+│  │  PostgreSQL   │          │     ChromaDB      │        │
+│  │ (SQLAlchemy 2 │          │ (sentence-        │        │
+│  │   async)      │          │  transformers)    │        │
+│  └───────────────┘          └───────────────────┘        │
+│                                                          │
+│              Groq API  (llama-3.3-70b-versatile)         │
+└──────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Folder Structure
+## Tech Stack
+
+| Layer | Technology |
+|---|---|
+| **Frontend** | Next.js 15 (App Router), TypeScript, Tailwind CSS |
+| **Backend** | Python 3.11, FastAPI, SQLAlchemy 2 (async) |
+| **Database** | PostgreSQL 16 (via asyncpg) |
+| **Vector Store** | ChromaDB (persistent, per-role collections) |
+| **Embeddings** | `sentence-transformers/all-MiniLM-L6-v2` (local, no API cost) |
+| **LLM** | Groq API — `llama-3.3-70b-versatile` (OpenAI-compatible SDK) |
+| **PDF Parsing** | pdfplumber |
+| **Config** | Pydantic Settings v2 (`.env`) |
+| **Containerisation** | Docker + Docker Compose |
+
+---
+
+## RAG Pipeline
+
+```
+knowledge_base/<role>/*.pdf
+        │
+        ▼  pdfplumber — extract raw text
+   raw text
+        │
+        ▼  512-word chunks with 64-word overlap
+   text chunks
+        │
+        ▼  all-MiniLM-L6-v2  →  384-dim embeddings
+   embeddings
+        │
+        ▼  ChromaDB upsert (one collection per role)
+   vector store  ←──── persists to disk in chroma_db/
+        │
+   At interview time:
+        │
+        ▼  build query from candidate skills + role
+   query embedding
+        │
+        ▼  cosine similarity top-k retrieval
+   relevant chunks
+        │
+        ▼  injected into Groq LLM prompt
+   personalised question
+```
+
+**Design choices:**
+- **ChromaDB** — embedded (no extra server in dev), same client API for prod `HttpClient` mode
+- **all-MiniLM-L6-v2** — runs locally, fast inference, excellent recall for technical text
+- **512-word / 64-overlap chunks** — balances context granularity vs. embedding quality
+
+---
+
+## Project Structure
 
 ```
 candidate-screening-system/
 ├── backend/
 │   ├── app/
-│   │   ├── api/
-│   │   │   ├── routes/
-│   │   │   │   ├── resume.py        # POST /resume/upload
-│   │   │   │   ├── interview.py     # POST /interview/start · GET /question/{id} · POST /answer
-│   │   │   │   └── report.py        # GET /report/{session_id}
-│   │   │   └── schemas.py           # Pydantic request/response models
+│   │   ├── api/routes/
+│   │   │   ├── resume.py          # POST /api/v1/resume/upload
+│   │   │   ├── interview.py       # start · question · answer · end
+│   │   │   └── report.py          # GET /api/v1/report/{session_id}
 │   │   ├── database/
-│   │   │   ├── base.py              # SQLAlchemy DeclarativeBase
-│   │   │   └── session.py           # Async engine + session factory
-│   │   ├── models/                  # ORM models
+│   │   │   ├── base.py            # DeclarativeBase
+│   │   │   └── session.py         # async engine + get_db
+│   │   ├── models/                # SQLAlchemy ORM models
 │   │   │   ├── candidate.py
 │   │   │   ├── session.py
 │   │   │   ├── question.py
 │   │   │   ├── answer.py
 │   │   │   └── report.py
 │   │   ├── rag/
-│   │   │   ├── embeddings.py        # sentence-transformers singleton
-│   │   │   ├── vector_store.py      # ChromaDB wrapper (per-role collections)
-│   │   │   ├── ingestion.py         # PDF → chunks → embeddings → ChromaDB
-│   │   │   └── retriever.py         # Query builder + top-k retrieval
+│   │   │   ├── embeddings.py      # sentence-transformers singleton
+│   │   │   ├── vector_store.py    # ChromaDB wrapper
+│   │   │   ├── ingestion.py       # PDF → chunks → embeddings → store
+│   │   │   └── retriever.py       # query builder + top-k retrieval
 │   │   ├── resume_parser/
-│   │   │   ├── extractor.py         # PDF text → LLM → structured JSON
-│   │   │   └── schemas.py           # ParsedResume Pydantic model
+│   │   │   ├── extractor.py       # PDF text → LLM → structured JSON
+│   │   │   └── schemas.py         # ParsedResume Pydantic model
 │   │   ├── interview/
-│   │   │   ├── prompts.py           # All LLM prompt templates
+│   │   │   ├── prompts.py         # All LLM prompt templates
 │   │   │   ├── question_generator.py
 │   │   │   └── report_generator.py
-│   │   ├── services/                # Business logic (service layer)
+│   │   ├── services/              # Business logic layer
 │   │   │   ├── candidate_service.py
 │   │   │   ├── interview_service.py
 │   │   │   └── report_service.py
 │   │   ├── utils/
-│   │   │   ├── config.py            # Pydantic Settings (env vars)
+│   │   │   ├── config.py          # Pydantic Settings
 │   │   │   └── logger.py
-│   │   └── main.py                  # FastAPI app + lifespan
-│   ├── knowledge_base/              # Drop PDFs here (by role subfolder)
-│   │   ├── ai_ml/
-│   │   ├── backend/
+│   │   └── main.py                # FastAPI app + lifespan
+│   ├── knowledge_base/
+│   │   ├── ai_ml/                 # ML textbooks
+│   │   ├── backend/               # Backend / system design books
 │   │   ├── frontend/
 │   │   ├── fullstack/
 │   │   ├── devops/
 │   │   └── data_science/
-│   ├── tests/
 │   ├── requirements.txt
 │   ├── Dockerfile
 │   └── .env.example
@@ -90,72 +154,17 @@ candidate-screening-system/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/
-│   │   │   ├── layout.tsx           # Root layout + header
-│   │   │   ├── page.tsx             # Candidate page (upload + role select)
-│   │   │   ├── interview/page.tsx   # Live interview
-│   │   │   └── results/page.tsx     # Final report
+│   │   │   ├── page.tsx           # Step 1: upload résumé + select role
+│   │   │   ├── interview/page.tsx # Step 2: live interview
+│   │   │   └── results/page.tsx   # Step 3: final report
 │   │   ├── lib/
-│   │   │   ├── api.ts               # Typed fetch wrappers
-│   │   │   └── utils.ts             # cn(), difficultyColor(), etc.
-│   │   ├── hooks/
-│   │   │   └── useInterview.ts      # Interview state machine hook
-│   │   └── types/index.ts           # Shared TypeScript types
+│   │   │   ├── api.ts             # Typed fetch wrappers
+│   │   │   └── utils.ts           # Tailwind helpers
+│   │   └── types/index.ts         # Shared TypeScript types
 │   ├── package.json
-│   ├── tailwind.config.ts
-│   ├── next.config.ts
 │   └── Dockerfile
 │
 └── docker-compose.yml
-```
-
----
-
-## Database Schema
-
-```sql
-candidates
-  id            UUID PK
-  name          VARCHAR(255)
-  email         VARCHAR(255) UNIQUE
-  resume_path   VARCHAR(512)
-  parsed_resume TEXT (JSON)
-  created_at    TIMESTAMPTZ
-
-interview_sessions
-  id                   UUID PK
-  candidate_id         UUID FK → candidates
-  selected_role        VARCHAR(128)
-  status               ENUM (pending|active|completed|aborted)
-  current_question_idx VARCHAR(8)
-  start_time           TIMESTAMPTZ
-  end_time             TIMESTAMPTZ
-
-questions
-  id            UUID PK
-  session_id    UUID FK → interview_sessions
-  question_text TEXT
-  source_context TEXT        -- RAG chunks used
-  topic_area    VARCHAR(256)
-  difficulty    ENUM (easy|medium|hard)
-  order_index   INT
-  is_follow_up  VARCHAR(1)
-
-answers
-  id            UUID PK
-  question_id   UUID FK → questions UNIQUE
-  answer_text   TEXT
-  quality_score FLOAT         -- 0.0–1.0, set during report generation
-  submitted_at  TIMESTAMPTZ
-
-reports
-  id             UUID PK
-  session_id     UUID FK → interview_sessions UNIQUE
-  summary        TEXT
-  strengths      TEXT (JSON array)
-  weaknesses     TEXT (JSON array)
-  overall_score  FLOAT
-  recommendation VARCHAR(64)  -- Hire | Maybe | Reject
-  generated_at   TIMESTAMPTZ
 ```
 
 ---
@@ -164,81 +173,57 @@ reports
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `POST` | `/api/v1/resume/upload` | Upload PDF résumé (multipart form) |
-| `POST` | `/api/v1/interview/start` | Start a session for a candidate + role |
-| `GET`  | `/api/v1/interview/question/{session_id}` | Get next question (generates on demand) |
+| `POST` | `/api/v1/resume/upload` | Upload PDF résumé (multipart/form-data) |
+| `POST` | `/api/v1/interview/start` | Start session — returns `session_id` |
+| `GET`  | `/api/v1/interview/question/{session_id}` | Get next question (RAG + LLM on demand) |
 | `POST` | `/api/v1/interview/answer` | Submit an answer |
 | `POST` | `/api/v1/interview/end/{session_id}` | Mark session complete |
-| `GET`  | `/api/v1/report/{session_id}` | Generate (or retrieve) the full report |
+| `GET`  | `/api/v1/report/{session_id}` | Generate (or retrieve) full report |
 | `GET`  | `/health` | Health check |
 
----
-
-## RAG Pipeline
-
-```
-knowledge_base/ai_ml/*.pdf
-        │
-        ▼  pdfplumber
-   raw text
-        │
-        ▼  512-word chunks, 64-word overlap
-   text chunks
-        │
-        ▼  sentence-transformers (all-MiniLM-L6-v2)
-   384-dim embeddings
-        │
-        ▼  ChromaDB (cosine similarity, per-role collection)
-   vector store
-        │
-   At interview time:
-        │
-        ▼  build query from resume skills + role
-   query embedding
-        │
-        ▼  top-k similarity search
-   retrieved chunks
-        │
-        ▼  Claude Sonnet prompt
-   personalised interview question
-```
-
-**Why these choices:**
-- **ChromaDB** — embedded (no separate server in dev), scales to a hosted instance in prod. Alternatives: Pinecone (managed, cost), Weaviate (more features, heavier).
-- **all-MiniLM-L6-v2** — fast, low memory, excellent semantic retrieval for technical text. Alternative: `text-embedding-3-small` (OpenAI, better quality, adds API cost/latency).
-- **512-word chunks / 64 overlap** — balances context granularity vs. token budget. Too small = fragmented; too large = diluted relevance score.
+Interactive docs available at `http://localhost:8000/docs` when running.
 
 ---
 
-## Quick Start (Local)
+## Database Schema
+
+```
+candidates         — id, name, email, resume_path, parsed_resume (JSON), created_at
+interview_sessions — id, candidate_id, selected_role, status, current_question_idx, start_time, end_time
+questions          — id, session_id, question_text, source_context, difficulty, order_index, is_follow_up
+answers            — id, question_id, answer_text, quality_score (0.0–1.0), submitted_at
+reports            — id, session_id, summary, strengths (JSON), weaknesses (JSON), overall_score, recommendation, generated_at
+```
+
+---
+
+## Local Setup (Without Docker)
 
 ### Prerequisites
 - Python 3.11+
 - Node.js 20+
 - PostgreSQL 16 running on `localhost:5432`
-- Anthropic API key
+- Free Groq API key — sign up at [console.groq.com](https://console.groq.com)
 
 ### Backend
 
 ```bash
 cd backend
 
-# 1. Create virtual environment
+# Create and activate virtual environment
 python -m venv .venv
-source .venv/bin/activate       # Windows: .venv\Scripts\activate
+.venv\Scripts\activate          # Windows
+# source .venv/bin/activate     # Mac/Linux
 
-# 2. Install dependencies
+# Install dependencies
 pip install -r requirements.txt
 
-# 3. Configure environment
+# Configure environment
 cp .env.example .env
-# Edit .env — set ANTHROPIC_API_KEY and DATABASE_URL
+# Edit .env — fill in DATABASE_URL and LLM_API_KEY
 
-# 4. (Optional) Ingest knowledge base PDFs
-#    Drop PDFs into knowledge_base/ai_ml/, knowledge_base/backend/, etc.
-python -m app.rag.ingestion
-
-# 5. Start the API server
+# Start the API server
+# (DB tables and knowledge-base ingestion run automatically on startup)
 uvicorn app.main:app --reload --port 8000
 ```
 
@@ -247,93 +232,102 @@ uvicorn app.main:app --reload --port 8000
 ```bash
 cd frontend
 npm install
-cp .env.local.example .env.local
+echo "NEXT_PUBLIC_API_URL=http://localhost:8000" > .env.local
 npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000).
 
-### Docker (Full Stack)
+---
+
+## Docker Setup (Recommended)
 
 ```bash
-# Copy and edit backend env
+# 1. Copy and configure environment
 cp backend/.env.example backend/.env
-# Set ANTHROPIC_API_KEY in backend/.env
+# Set LLM_API_KEY=gsk_... in backend/.env
 
+# 2. Build and start everything
 docker compose up --build
 ```
+
+Services started:
+- `db` — PostgreSQL 16 on port 5432
+- `backend` — FastAPI on port 8000
+- `frontend` — Next.js on port 3000
 
 ---
 
 ## Knowledge Base Setup
 
-Place role-specific PDFs into the corresponding subfolder:
+Drop role-specific PDFs into the matching subfolder before starting the server:
 
 ```
 backend/knowledge_base/
-├── ai_ml/          ← ML textbooks, papers, TensorFlow/PyTorch docs
-├── backend/        ← System design, DB internals, API design guides
-├── frontend/       ← React, browser internals, accessibility
-├── fullstack/      ← Mix of backend + frontend
+├── ai_ml/          ← ML textbooks (Mitchell, Géron, Bishop…)
+├── backend/        ← System design, clean code, DB internals
+├── frontend/       ← React, browser performance, accessibility
+├── fullstack/      ← Combined frontend + backend resources
 ├── devops/         ← Kubernetes, CI/CD, observability
 └── data_science/   ← Statistics, pandas, SQL, visualisation
 ```
 
-Then run the ingestion script once:
+To re-run ingestion manually:
 
 ```bash
 cd backend
 python -m app.rag.ingestion
 ```
 
-The embeddings persist in `backend/chroma_db/` between restarts.
+Embeddings persist in `backend/chroma_db/` between restarts.
 
 ---
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `DATABASE_URL` | `postgresql+asyncpg://...` | Async PostgreSQL connection string |
-| `ANTHROPIC_API_KEY` | — | **Required.** Your Anthropic API key |
-| `LLM_MODEL` | `claude-sonnet-4-6` | Claude model to use |
-| `EMBEDDING_MODEL` | `all-MiniLM-L6-v2` | Sentence-transformers model |
-| `QUESTIONS_PER_SESSION` | `8` | Number of questions per interview |
-| `TOP_K_CHUNKS` | `5` | RAG chunks retrieved per question |
-| `UPLOAD_DIR` | `uploads` | Directory to store uploaded PDFs |
-| `DEBUG` | `false` | Enable SQLAlchemy query logging |
-
----
-
-## Running Tests
-
-```bash
-cd backend
-pip install pytest pytest-asyncio
-pytest tests/ -v
-```
-
----
-
-## Technology Decisions
-
-| Decision | Choice | Why | Alternative considered |
+| Variable | Required | Default | Description |
 |---|---|---|---|
-| **LLM** | Claude Sonnet (Anthropic) | Superior instruction-following, consistent JSON output | GPT-4o (higher cost), Gemini (worse structured output) |
-| **Embeddings** | all-MiniLM-L6-v2 | Local, fast, 384-dim, excellent for technical text | OpenAI text-embedding-3-small (API cost per call) |
-| **Vector DB** | ChromaDB (persistent) | Zero-infra in dev, same API for prod HttpClient | Pinecone (managed cost), pgvector (fewer index options) |
-| **ORM** | SQLAlchemy 2 async | Native async, type-safe, battle-tested | Tortoise ORM (less ecosystem), SQLModel (thin wrapper) |
-| **API** | FastAPI | Auto OpenAPI docs, Pydantic v2, native async | Django REST (heavier), Flask (no async) |
-| **Frontend** | Next.js 15 App Router | RSC, built-in routing, Turbopack | Vite + React (more config), Remix (smaller ecosystem) |
-| **CSS** | Tailwind CSS | Utility-first, zero runtime | CSS Modules (verbose), Styled Components (runtime cost) |
+| `DATABASE_URL` | Yes | — | `postgresql+asyncpg://user:pass@host/db` |
+| `LLM_API_KEY` | Yes | — | Groq API key (`gsk_...`) |
+| `LLM_BASE_URL` | Yes | — | `https://api.groq.com/openai/v1` |
+| `LLM_MODEL` | No | `llama-3.3-70b-versatile` | Groq model ID |
+| `LLM_TEMPERATURE` | No | `0.7` | Generation temperature |
+| `EMBEDDING_MODEL` | No | `all-MiniLM-L6-v2` | sentence-transformers model |
+| `QUESTIONS_PER_SESSION` | No | `8` | Questions per interview |
+| `TOP_K_CHUNKS` | No | `5` | RAG chunks retrieved per question |
+| `UPLOAD_DIR` | No | `uploads` | Directory for uploaded résumés |
+| `CHROMA_PATH` | No | `chroma_db` | ChromaDB persistence directory |
+| `DEBUG` | No | `false` | Enable verbose SQLAlchemy logging |
+
+---
+
+## Key Design Decisions
+
+| Decision | Choice | Rationale |
+|---|---|---|
+| **LLM Provider** | Groq (llama-3.3-70b-versatile) | Free tier, ~300 tok/s, OpenAI-compatible — no SDK change needed |
+| **Embeddings** | all-MiniLM-L6-v2 (local) | No API cost per call, 384-dim, strong semantic recall for tech text |
+| **Vector DB** | ChromaDB (persistent) | Zero infrastructure in dev; same API scales to hosted mode in prod |
+| **ORM** | SQLAlchemy 2 async | Native async, fully typed, battle-tested |
+| **API** | FastAPI | Auto OpenAPI docs, Pydantic v2 integration, native async |
+| **Frontend** | Next.js 15 App Router | File-based routing, TypeScript-first, Turbopack dev server |
+| **Chunking** | 512 words / 64 overlap | Balances context granularity vs. relevance score dilution |
 
 ---
 
 ## Production Considerations
 
-- **Auth**: Add JWT middleware (FastAPI-Users or custom) before exposing APIs publicly.
-- **Rate limiting**: Add `slowapi` or an API gateway in front of question generation (LLM calls are expensive).
-- **ChromaDB**: Switch `PersistentClient` → `HttpClient` pointing at a dedicated ChromaDB container.
-- **Alembic**: Replace `create_all` in lifespan with proper Alembic migrations (`alembic upgrade head`).
-- **Observability**: Add OpenTelemetry traces around LLM calls and DB queries.
-- **File storage**: Replace local `uploads/` with S3 or Azure Blob for horizontal scaling.
+- **Authentication** — add JWT middleware before exposing APIs publicly
+- **Rate limiting** — add `slowapi` or an API gateway (LLM calls are expensive per session)
+- **ChromaDB** — switch `PersistentClient` → `HttpClient` for a standalone container
+- **Migrations** — replace `create_all` in lifespan with `alembic upgrade head`
+- **File storage** — replace local `uploads/` with S3 or Azure Blob for horizontal scaling
+- **Observability** — add OpenTelemetry traces around LLM calls and DB queries
+
+---
+
+## Author
+
+**Thanuj Raja** — [thanujraja1234@gmail.com](mailto:thanujraja1234@gmail.com)
+
+Submitted for PGAGI AI/ML & Backend Engineering Internship assignment.
