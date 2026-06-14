@@ -2,7 +2,7 @@ import re
 import json
 from pathlib import Path
 
-import anthropic
+from openai import AsyncOpenAI
 import pdfplumber
 
 from app.resume_parser.schemas import ParsedResume
@@ -15,7 +15,7 @@ _EXTRACTION_PROMPT = """
 You are a resume parser. Extract structured information from the following resume text.
 Return ONLY valid JSON matching this schema (no markdown, no extra text):
 
-{
+{{
   "name": "string",
   "email": "string",
   "phone": "string",
@@ -27,7 +27,7 @@ Return ONLY valid JSON matching this schema (no markdown, no extra text):
   "experience": ["Role at Company (year–year): summary", ...],
   "education": "Degree, Institution, Year",
   "certifications": ["Cert name", ...]
-}
+}}
 
 Resume text:
 \"\"\"
@@ -52,16 +52,16 @@ async def parse_resume(path: str | Path) -> ParsedResume:
         log.warning("PDF yielded no text; returning empty resume")
         return ParsedResume(raw_text=raw_text)
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
     prompt = _EXTRACTION_PROMPT.format(resume_text=raw_text[:8000])  # stay within context
 
     try:
-        message = await client.messages.create(
+        message = await client.chat.completions.create(
             model=settings.llm_model,
             max_tokens=1024,
             messages=[{"role": "user", "content": prompt}],
         )
-        raw_json = message.content[0].text.strip()
+        raw_json = message.choices[0].message.content.strip()
         # Strip markdown code fences if model adds them
         raw_json = re.sub(r"^```(?:json)?\s*", "", raw_json)
         raw_json = re.sub(r"\s*```$", "", raw_json)

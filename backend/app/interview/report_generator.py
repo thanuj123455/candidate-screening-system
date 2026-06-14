@@ -1,7 +1,7 @@
 import json
 import re
 
-import anthropic
+from openai import AsyncOpenAI
 
 from app.interview.prompts import REPORT_GENERATION_PROMPT
 from app.resume_parser.schemas import ParsedResume
@@ -26,14 +26,14 @@ async def generate_report(
         transcript=transcript,
     )
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    message = await client.messages.create(
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+    message = await client.chat.completions.create(
         model=settings.llm_model,
         max_tokens=settings.llm_max_tokens,
         temperature=0.3,
         messages=[{"role": "user", "content": prompt}],
     )
-    raw = message.content[0].text.strip()
+    raw = message.choices[0].message.content.strip()
     raw = re.sub(r"^```(?:json)?\s*", "", raw)
     raw = re.sub(r"\s*```$", "", raw)
 

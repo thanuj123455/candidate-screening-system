@@ -1,3 +1,4 @@
+import asyncio
 import json
 from datetime import datetime, timezone
 from uuid import UUID
@@ -49,7 +50,7 @@ async def get_next_question(db: AsyncSession, session_id: UUID) -> Question | No
     candidate = await _load_candidate(db, session.candidate_id)
     parsed_resume = ParsedResume.model_validate_json(candidate.parsed_resume or "{}")
 
-    chunks = retrieve_context(parsed_resume, session.selected_role)
+    chunks = await asyncio.to_thread(retrieve_context, parsed_resume, session.selected_role)
     asked = [q.question_text for q in session.questions]
 
     q_text, context = await generate_question(

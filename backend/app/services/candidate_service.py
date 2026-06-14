@@ -1,9 +1,6 @@
-import json
-import shutil
 from pathlib import Path
 from uuid import UUID
 
-from fastapi import UploadFile
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -21,14 +18,13 @@ async def upload_and_parse_resume(
     db: AsyncSession,
     name: str,
     email: str,
-    file: UploadFile,
+    filename: str | None,
+    file_contents: bytes,
 ) -> Candidate:
     _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
-    safe_name = f"{email.replace('@', '_').replace('.', '_')}_{file.filename}"
+    safe_name = f"{email.replace('@', '_').replace('.', '_')}_{filename or 'upload.pdf'}"
     dest = _UPLOAD_DIR / safe_name
-
-    with dest.open("wb") as out:
-        shutil.copyfileobj(file.file, out)
+    dest.write_bytes(file_contents)
 
     parsed = await parse_resume(dest)
 

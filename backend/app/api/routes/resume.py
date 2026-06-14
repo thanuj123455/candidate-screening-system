@@ -26,10 +26,7 @@ async def upload_resume(
     if len(contents) > MAX_FILE_SIZE_MB * 1024 * 1024:
         raise HTTPException(status_code=413, detail=f"File too large (max {MAX_FILE_SIZE_MB} MB).")
 
-    # Reset file pointer so the service can read it again
-    await file.seek(0)
-
-    candidate = await upload_and_parse_resume(db, name, email, file)
+    candidate = await upload_and_parse_resume(db, name, email, file.filename, contents)
     parsed = json.loads(candidate.parsed_resume or "{}")
 
     return ResumeUploadResponse(

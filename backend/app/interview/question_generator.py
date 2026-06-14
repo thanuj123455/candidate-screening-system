@@ -1,4 +1,4 @@
-import anthropic
+from openai import AsyncOpenAI
 
 from app.interview.prompts import QUESTION_GENERATION_PROMPT, FOLLOW_UP_PROMPT
 from app.resume_parser.schemas import ParsedResume
@@ -33,14 +33,14 @@ async def generate_question(
         difficulty=difficulty,
     )
 
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    message = await client.messages.create(
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+    message = await client.chat.completions.create(
         model=settings.llm_model,
         max_tokens=512,
         temperature=settings.llm_temperature,
         messages=[{"role": "user", "content": prompt}],
     )
-    question_text = message.content[0].text.strip()
+    question_text = message.choices[0].message.content.strip()
     log.info(f"Generated question [{difficulty}]: {question_text[:80]}...")
     return question_text, context[:2000]
 
@@ -50,11 +50,11 @@ async def generate_follow_up(original_question: str, candidate_answer: str) -> s
         original_question=original_question,
         candidate_answer=candidate_answer,
     )
-    client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    message = await client.messages.create(
+    client = AsyncOpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url)
+    message = await client.chat.completions.create(
         model=settings.llm_model,
         max_tokens=256,
         temperature=0.5,
         messages=[{"role": "user", "content": prompt}],
     )
-    return message.content[0].text.strip()
+    return message.choices[0].message.content.strip()

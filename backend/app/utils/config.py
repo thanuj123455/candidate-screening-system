@@ -23,9 +23,10 @@ class Settings(BaseSettings):
     # Embeddings
     embedding_model: str = "all-MiniLM-L6-v2"
 
-    # LLM — Anthropic Claude
-    anthropic_api_key: str = ""
-    llm_model: str = "claude-sonnet-4-6"
+    # LLM — Groq (OpenAI-compatible)
+    llm_api_key: str = ""
+    llm_base_url: str = "https://api.groq.com/openai/v1"
+    llm_model: str = "llama-3.3-70b-versatile"
     llm_temperature: float = 0.7
     llm_max_tokens: int = 1024
 
