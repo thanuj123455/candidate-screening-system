@@ -31,7 +31,9 @@ function InterviewContent() {
       setQuestion(q);
       setAnswer("");
     } catch {
-      setError("No more questions available.");
+      // No more questions — go straight to results
+      await api.endSession(sessionId).catch(() => {});
+      router.push(`/results?session=${sessionId}`);
     } finally {
       setLoading(false);
     }
@@ -46,15 +48,16 @@ function InterviewContent() {
       const newCount = answeredCount + 1;
       setAnsweredCount(newCount);
 
-      if (question.is_last || newCount >= question.total_questions) {
-        await api.endSession(sessionId);
+      const done = question.is_last || newCount >= question.total_questions;
+      if (done) {
+        // endSession is best-effort — don't let it block navigation
+        await api.endSession(sessionId).catch(() => {});
         router.push(`/results?session=${sessionId}`);
       } else {
         await loadQuestion();
       }
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to submit");
-    } finally {
+      setError(e instanceof Error ? e.message : "Failed to submit answer. Please try again.");
       setSubmitting(false);
     }
   }
